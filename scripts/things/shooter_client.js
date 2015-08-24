@@ -104,6 +104,7 @@ elation.require(_reqs, function() {
     
     this.changeThing = function(ev) {
       // update a thing from server info
+      // console.log(ev)
       var thing = ev.data;
       if (this.children[thing.name]) {
         var child = this.children[thing.name];

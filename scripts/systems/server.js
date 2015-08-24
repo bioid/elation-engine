@@ -180,9 +180,9 @@ elation.extend("engine.systems.server", function(args) {
      type: ev.type,
      data: ev.data
    };
-   this.adminServer.wss.clients.forEach(function(client){
-     client.send(JSON.stringify(msg));
-   });
+  // this.adminServer.wss.clients.forEach(function(client){
+  //   client.send(JSON.stringify(msg));
+  // });
  };
  
 });

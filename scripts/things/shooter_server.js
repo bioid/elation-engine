@@ -5,7 +5,7 @@
 var _reqs = [
     'engine.things.remoteplayer',
     'engine.things.generic',
-    'engine.things.maskgenerator'
+    'engine.things.maskgenerator',
   ];
   
  elation.require(_reqs, function() {
@@ -39,11 +39,20 @@ var _reqs = [
       this.loadWorld();
     };
     
+    this.addJanusVars = function(thing) {
+        thing.janusDirs = {};
+        thing.janusDirs.tmpvec1 = new THREE.Vector3();
+        thing.janusDirs.tmpvec2 = new THREE.Vector3();
+        thing.janusDirs.tmpvec3 = new THREE.Vector3(0, 1, 0);
+        thing.tmpmatrix = new THREE.Matrix4();
+    };
+    
     this.spawnRemotePlayer = function(event) {
-      console.log(event.type, event.data.thing.properties.player_id)
+      console.log(event.type, event.data.thing.properties.player_id);
       var thing  = event.data.thing;
       thing.properties.tags = '';
       this.things[thing.name] = this.spawn('remoteplayer', event.data.id, thing.properties);
+      if (event.data.janus) this.addJanusVars(this.things[thing.name]);
     };
     
     this.onPlayerDisconnect = function(ev) {
@@ -59,29 +68,48 @@ var _reqs = [
     this.spawnNewThing = function(ev) {
       console.log(ev.type, ev.data.thing.type);
       var thing = ev.data.thing;
-      var newThing = this.spawn(thing.type, thing.name, thing.properties);
+      this.things[thing.name] = this.spawn(thing.type, thing.name, thing.properties);
+      if (ev.data.janus) this.addJanusVars(this.things[thing.name]);
     };
     
     this.destroyRemotePlayer = function(ev) {
       // console.log(ev.data.id);
       // this.players[ev.data.id].die();
     };
-    
+
     this.remoteThingChange = function(ev) {
       var thing = ev.data.data.thing;
       if (this.children[thing.name]) {
+        
         for (var prop in thing.properties) {
           this.children[thing.name].set(prop, thing.properties[prop], false);
+        }
+        if (thing.directions && thing.directions.up_dir) {
+          var obj = this.children[thing.name];
+          obj.janusDirs.tmpvec1.fromArray([0, 0, 0]);
+          obj.janusDirs.tmpvec2.fromArray(thing.directions.view_dir);
+          obj.janusDirs.tmpvec3.fromArray(thing.directions.up_dir);
+          obj.tmpmatrix.lookAt(obj.janusDirs.tmpvec1, obj.janusDirs.tmpvec2, obj.janusDirs.tmpvec3);
+          obj.properties.orientation.setFromRotationMatrix(obj.tmpmatrix);
+        }
+        else if (thing.directions && thing.directions.x_dir) {
+          var obj = this.children[thing.name];
+          obj.janusDirs.tmpvec1.fromArray(thing.directions.x_dir);
+          obj.janusDirs.tmpvec2.fromArray(thing.directions.y_dir);
+          obj.janusDirs.tmpvec3.fromArray(thing.directions.z_dir);
+          obj.tmpmatrix.makeBasis(obj.janusDirs.tmpvec1, obj.janusDirs.tmpvec2, obj.janusDirs.tmpvec3);
+          obj.properties.orientation.setFromRotationMatrix(obj.tmpmatrix);
+          console.log('matrix', obj.tmpmatrix, 'thing.properties.orientation', obj.properties.orientation);
         }
         this.children[thing.name].refresh();
       }
     };
     
     this.sendWorldData = function(ev) {
-      console.log(ev.type, ev.data)
+      console.log(ev.type, ev.data);
       var client = this.server.clients[ev.data];
       client.send(this.server.serialize_world());
-    }
+    };
     
     this.loadWorld = function() {
       // Virtual

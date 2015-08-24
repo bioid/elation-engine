@@ -4,7 +4,6 @@
 */
 
 THREE.ColladaLoader = function () {
-
 	var COLLADA = null;
 	var scene = null;
 	var visualScene;
@@ -63,7 +62,7 @@ THREE.ColladaLoader = function () {
 		if ( document.implementation && document.implementation.createDocument ) {
 
 			var request = new XMLHttpRequest();
-
+			console.log("colladaloader.load");
 			request.onreadystatechange = function() {
 
 				if( request.readyState === 4 ) {

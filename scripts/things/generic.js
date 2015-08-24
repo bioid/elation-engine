@@ -599,6 +599,7 @@ elation.component.add("engine.things.generic", function() {
     this.refresh();
   }
   this.loadCollada = function(url) {
+    if (ENV_IS_NODE) return;
     if (!THREE.ColladaLoader) {
       // If the loader hasn't been initialized yet, fetch it!
       elation.require('engine.external.three.ColladaLoader', elation.bind(this, this.loadCollada, url));
@@ -610,7 +611,7 @@ elation.component.add("engine.things.generic", function() {
   }
   this.processCollada = function(url, collada) {
     collada.scene.rotation.x = -Math.PI / 2;
-    collada.scene.rotation.z = Math.PI;
+    // collada.scene.rotation.z = Math.PI;
     this.extractEntities(collada.scene);
 /*
     collada.scene.computeBoundingSphere();
