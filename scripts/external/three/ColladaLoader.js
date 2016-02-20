@@ -3609,7 +3609,7 @@ THREE.ColladaLoader = function () {
 							this[ 'bump' ] = ( new ColorOrTexture() ).parse( child );
 						}
 					} else {
-						console.warn( "Shader.prototype.parse: Attribute 'bumptype' missing from bump node - defaulting to 'HEIGHTFIELD'" );
+						console.warn( "Shader.prototype.parse: Attribute 'bumptype' missing from bump node - defaulting to 'NORMAL'" );
 						this[ 'normal' ] = ( new ColorOrTexture() ).parse( child );
 					}
 
@@ -3713,9 +3713,11 @@ THREE.ColladaLoader = function () {
 
 										} else {
 
-											texture = new THREE.Texture();
+											//texture = new THREE.Texture();
 
-											loadTextureImage( texture, url );
+											//loadTextureImage( texture, url );
+											// FIXME - hack for Elation texture caching
+											texture = elation.engine.materials.getTexture(url);
 
 										}
 
@@ -5193,6 +5195,7 @@ THREE.ColladaLoader = function () {
 
 		loader = new THREE.ImageLoader();
 
+		texture.sourceFile = url;
 		loader.load( url, function ( image ) {
 
 			texture.image = image;

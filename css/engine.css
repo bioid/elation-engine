@@ -1,12 +1,3 @@
-body {
-  font-size: .8em;
-}
-
-@media only screen and (max-width: 800px) {
-  body {
-    zoom: .6;
-  }
-}
 .engine_view {
   min-height: 600px;
   position: relative;
@@ -19,6 +10,41 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
+}
+.engine_view.state_cursor {
+  cursor: pointer;
+}
+.engine_view_crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: url(http://i.imgur.com/AQEShze.png) no-repeat;
+  width: 48px;
+  height: 48px;
+  opacity: .4;
+  transform: translate(-24px, -24px);
+  z-index: 50;
+  pointer-events: none;
+}
+.state_cursor .engine_view_crosshair {
+}
+.engine_view_rendermode_oculus .engine_view_crosshair {
+  position: absolute;
+  top: 50%;
+  background-position: 27%;
+  width: 100%;
+  left: 0;
+}
+.engine_view_rendermode_oculus .engine_view_crosshair::after {
+  content: ' ';
+  position: absolute;
+  background: url(http://i.imgur.com/AQEShze.png) no-repeat;
+  background-position: 73%;
+  display: block;
+  width: 100%;
+  height: 48px;
+  transform: translate(-24px, -24px);
+  top: 50%;
 }
 .ui_window .ui_window_content.engine_configuration {
   width: 60em;

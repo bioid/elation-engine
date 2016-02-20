@@ -1,23 +1,25 @@
 var deps = [ 
   "engine.parts",
   "engine.materials",
+  "engine.assets",
   "engine.geometries",
   "engine.things.generic",
   "engine.things.menu",
   "utils.math",
+  "ui.panel"
 ];
 
 if (ENV_IS_BROWSER) {
   deps = deps.concat([
+    "engine.external.three.three",
+    "share.picker",
     "share.targets.imgur",
     "share.targets.dropbox",
-    "share.targets.google",
-    ])
-  deps.push("engine.external.three.three");
-  deps.push("ui.panel");
-}
-
-else if (ENV_IS_NODE) {
+    "share.targets.googledrive",
+    "share.targets.youtube",
+    "share.targets.file",
+  ]);
+} else if (ENV_IS_NODE) {
   deps.push("engine.external.three.nodethree");
 }
 
@@ -36,8 +38,11 @@ elation.require(deps, function() {
     this.started = false;
     this.running = false;
     this.name = name;
+    this.useAnimationFrame = true;
+    this.targetFramerate = 60;
 
     this.init = function() {
+      this.client = elation.engine.client(this.name);
       this.systems = new elation.engine.systems(this);
       // shutdown cleanly if the user leaves the page
       var target = null;
@@ -74,8 +79,9 @@ elation.require(deps, function() {
     }
 
     // simple requestAnimationFrame wrapper
-    this.requestAnimationFrame = (function() {
-        if (typeof window !== 'undefined') {
+    this.requestAnimationFrame = (elation.bind(this, function() {
+        var framerate = this.targetFramerate || 60;
+        if (this.useAnimationFrame && typeof window !== 'undefined') {
           // Browsers
           return  window.requestAnimationFrame       || 
                   window.webkitRequestAnimationFrame || 
@@ -83,15 +89,15 @@ elation.require(deps, function() {
                   window.oRequestAnimationFrame      || 
                   window.msRequestAnimationFrame     || 
                   function( callback ) {
-                    setTimeout(callback, 1000 / 60);
+                    setTimeout(callback, 1000 / framerate);
                   };
         } else {
           // NodeJS
           return function( callback ) {
-            setTimeout(callback, 1000 / 60);
-          };
+            setTimeout(callback, 1000 / this.targetFramerate);
+          }.bind(this);
         }
-      })();
+      }))();
     this.frame = function(fn) {
       if (ENV_IS_NODE) var window;
       this.requestAnimationFrame.call(window, fn);
@@ -166,8 +172,9 @@ elation.require(deps, function() {
   });
   elation.component.add("engine.configuration", function() {
     this.init = function() {
-      this.engine = this.args.engine;
-      this.view = this.args.view;
+      this.client = this.args.client;
+      this.engine = this.client.engine;
+      this.view = this.client.view;
       this.create();
       this.addclass('engine_configuration');
     }
@@ -178,41 +185,22 @@ elation.require(deps, function() {
         });
 
         /* Video Settings */
-        var videopanel = elation.ui.panel({
-          orientation: 'vertical'
+        var videopanel = elation.engine.systems.render.config({
+          client: this.client,
+          rendersystem: this.engine.systems.render,
         });
-        var oculus = elation.ui.toggle({
-          label: 'Oculus Rift',
-          append: videopanel,
-          events: { toggle: elation.bind(this, this.toggleVR) }
+
+        /* Sound Settings */
+        var soundpanel = elation.engine.systems.sound.config({
+          client: this.client
         });
-        var fullscreen = elation.ui.toggle({
-          label: 'Fullscreen',
-          append: videopanel,
-          events: { toggle: elation.bind(this, this.toggleFullscreen) }
-        });
-        this.view.scale = 100;
-        var scale = elation.ui.slider({
-          append: videopanel,
-          min: 1,
-          max: 200,
-          snap: 1,
-          handles: [
-            {
-              name: 'handle_one_scale',
-              value: this.view.scale,
-              labelprefix: 'View scale:',
-              bindvar: [this.view, 'scale']
-            }
-          ],
-          events: { ui_slider_change: elation.bind(this.view.rendersystem, this.view.rendersystem.setdirty) }
-        });
+
         var configtabs = elation.ui.tabbedcontent({
           append: this,
           items: {
             controls: { label: 'Controls', content: controlpanel },
             video: { label: 'Video', content: videopanel },
-            audio: { label: 'Audio', disabled: true },
+            audio: { label: 'Audio', content: soundpanel },
             network: { label: 'Network', disabled: true },
           }
         });
@@ -240,15 +228,51 @@ elation.require(deps, function() {
   elation.component.add('engine.client', function() {
     this.init = function() {
       this.name = this.args.name || 'default';
-      this.engine = elation.engine.create(this.name, ["physics", "sound", "ai", "world", "render", "controls"], elation.bind(this, this.startEngine));
+      this.enginecfg = {
+        systems: [
+          "physics",
+          "world",
+          "ai",
+          "admin", 
+          "render", 
+          "sound", 
+          "controls"
+        ],
+        crosshair: true,
+        stats: true,
+        picking: true,
+        fullsize: true,
+      };
+      this.initEngine();
+      this.loadEngine();
+    }
+    // Set up engine parameters before creating.  To be overridden by extending class
+    this.initEngine = function() {
+    }
+    // Instantiate the engine
+    this.loadEngine = function() {
+      this.engine = elation.engine.create(
+        this.name, 
+        this.enginecfg.systems,
+        elation.bind(this, this.startEngine)
+      );
+      this.engine.client = this;
     }
     this.initWorld = function() {
       // Virtual stub - inherit from elation.engine.client, then override this for your app
+      var worldurl = elation.utils.arrayget(this.args, 'world.url');
+      var worlddata = elation.utils.arrayget(this.args, 'world.data');
+      var parsedurl = elation.utils.parseURL(document.location.hash);
+      if (worldurl && !(parsedurl.hashargs && parsedurl.hashargs['world.url'])) {
+        this.engine.systems.world.loadSceneFromURL(worldurl);
+      } else if (worlddata) {
+        this.engine.systems.world.load(worlddata);
+      }
     }
     this.startEngine = function(engine) {
       this.world = this.engine.systems.world; // shortcut
 
-      this.view = elation.engine.systems.render.view("main", elation.html.create({ tag: 'div', append: this }), { fullsize: 1, picking: true, engine: this.name, showstats: true } );
+      this.view = elation.engine.systems.render.view("main", elation.html.create({ tag: 'div', append: this }), { fullsize: this.enginecfg.fullsize, picking: this.enginecfg.picking, engine: this.name, showstats: this.enginecfg.stats, crosshair: this.enginecfg.crosshair } );
 
       this.initWorld();
       this.initControls();
@@ -263,18 +287,35 @@ elation.require(deps, function() {
       this.controlstate = this.engine.systems.controls.addContext(this.name, {
         'menu': ['keyboard_esc,gamepad_0_button_9', elation.bind(this, this.toggleMenu)],
         'share_screenshot': ['keyboard_comma', elation.bind(this, this.shareScreenshot)],
-        'share_gif': ['keyboard_period', elation.bind(this, this.shareGif)],
+        'share_gif': ['keyboard_period', elation.bind(this, this.shareMP4)],
         'pointerlock': ['pointerlock', elation.bind(this, this.togglePointerLock)],
         'vr_toggle': ['keyboard_ctrl_rightsquarebracket', elation.bind(this, this.toggleVR)],
         'vr_calibrate': ['keyboard_ctrl_leftsquarebracket', elation.bind(this, this.calibrateVR)],
       });
       this.engine.systems.controls.activateContext(this.name);
     }
+    this.setActiveThing = function(thing) {
+      this.engine.systems.render.views.main.setactivething(thing);
+      if (thing.ears) {
+        this.engine.systems.sound.setActiveListener(thing.ears);
+      }
+
+    }
+    this.getPlayer = function() {
+      if (!this.player) {
+        var players = this.engine.systems.world.getThingsByTag('player');
+        if (players && players.length > 0) {
+          this.player = players[0];
+        }
+      }
+      return this.player;
+    }
     this.showMenu = function() {
-      if (this.player){
+      var player = this.getPlayer();
+      if (player){
         if (!this.menu) {
-          this.menu = this.player.camera.spawn('menu', null, { 
-            position: [0,0,-2],
+          this.menu = player.camera.spawn('menu', null, { 
+            position: [0,0,-0.2],
             items: [
               { 
                 text: 'Intro',
@@ -301,7 +342,7 @@ elation.require(deps, function() {
   */
             ],
             labelcfg: {
-              size: .1,
+              size: .01,
               lineheight: 1.5,
               color: 0x999999,
               hovercolor: 0x003300,
@@ -310,19 +351,22 @@ elation.require(deps, function() {
             }
           });
         } else {
-          this.player.camera.add(this.menu);
+          player.camera.add(this.menu);
         }
-        this.player.disable();
+        player.disable();
         this.menu.enable();
+        this.menu.refresh();
+        player.refresh();
         this.menuShowing = true;
       }
     }
     this.hideMenu = function() {
-      if (this.menu) {
-        this.player.camera.remove(this.menu);
+      var player = this.getPlayer();
+      if (player && this.menu) {
+        player.camera.remove(this.menu);
         if (this.configmenu) this.configmenu.hide();
         //if (this.loaded) {
-          this.player.enable();
+          player.enable();
         //}
         this.menuShowing = false;
         this.menu.disable();
@@ -362,7 +406,7 @@ elation.require(deps, function() {
     }
     this.configureOptions = function() {
       if (!this.configmenu) {
-        var configpanel = elation.engine.configuration({engine: this.engine, view: this.view});
+        var configpanel = elation.engine.configuration({client: this});
         this.configmenu = elation.ui.window({
           append: document.body,
           classname: this.name + '_config',
@@ -378,6 +422,7 @@ elation.require(deps, function() {
       this.configmenu.show();
     }
     this.startGame = function() {
+      this.hideMenu();
     }
     this.showAbout = function() {
     }
@@ -385,7 +430,9 @@ elation.require(deps, function() {
       this.sharepicker = elation.share.picker({append: document.body});
       this.sharepicker.addShareTarget(elation.share.targets.imgur({clientid: '96d8f6e2515953a'}));
       this.sharepicker.addShareTarget(elation.share.targets.dropbox({clientid: 'g5m5xsgqaqmf7jc'}));
-      this.sharepicker.addShareTarget(elation.share.targets.google({clientid: '374523350201-lev5al121s8u9aaq8spor3spsaugpcmd.apps.googleusercontent.com'}));
+      this.sharepicker.addShareTarget(elation.share.targets.googledrive({clientid: '374523350201-lev5al121s8u9aaq8spor3spsaugpcmd.apps.googleusercontent.com'}));
+      this.sharepicker.addShareTarget(elation.share.targets.youtube({clientid: '374523350201-lev5al121s8u9aaq8spor3spsaugpcmd.apps.googleusercontent.com'}));
+      this.sharepicker.addShareTarget(elation.share.targets.file({}));
     }
     this.shareScreenshot = function(ev) {
       if (typeof ev == 'undefined' || ev.value == 1) {
@@ -393,6 +440,7 @@ elation.require(deps, function() {
           this.createSharePicker();
         }
         var recorder = this.view.recorder;
+/*
         recorder.captureJPG().then(elation.bind(this, function(data) {
           var img = data.image.data;
           this.sharepicker.share({
@@ -403,6 +451,17 @@ elation.require(deps, function() {
           var now = new Date().getTime();
           console.log('finished jpg in ' + data.time.toFixed(2) + 'ms'); 
         }));
+*/
+        recorder.capturePNG().then(elation.bind(this, function(data) {
+          var img = data.image.data;
+          this.sharepicker.share({
+            name: this.getScreenshotFilename('png'), 
+            type: 'image/png',
+            image: img, 
+          });
+          var now = new Date().getTime();
+          console.log('finished png in ' + data.time.toFixed(2) + 'ms'); 
+        }));
       }
     }
     this.shareGif = function(ev) {
@@ -411,8 +470,8 @@ elation.require(deps, function() {
           this.createSharePicker();
         }
         var recorder = this.view.recorder;
-        recorder.captureGIF(512, 512, 75, 100).then(elation.bind(this, function(data) {
-          var img = data.image;
+        recorder.captureGIF(1920, 1080, 1, 200).then(elation.bind(this, function(data) {
+          var img = data.file;
           this.sharepicker.share({
             name: this.getScreenshotFilename('gif'), 
             type: 'image/gif',
@@ -420,6 +479,24 @@ elation.require(deps, function() {
           });
           var now = new Date().getTime();
           console.log('finished gif in ' + data.time.toFixed(2) + 'ms'); 
+        }));
+      }
+    }
+    this.shareMP4 = function(ev) {
+      if (typeof ev == 'undefined' || ev.value == 1) {
+        if (!this.sharepicker) {
+          this.createSharePicker();
+        }
+        var recorder = this.view.recorder;
+        recorder.captureMP4(1280, 720, 25, 30).then(elation.bind(this, function(data) {
+          var img = data.file;
+          this.sharepicker.share({
+            name: this.getScreenshotFilename('mp4'), 
+            type: 'video/mp4',
+            image: img, 
+          });
+          var now = new Date().getTime();
+          console.log('finished mp4 in ' + data.time.toFixed(2) + 'ms'); 
         }));
       }
     }
@@ -435,7 +512,7 @@ elation.require(deps, function() {
       var filename = 'vrcade-' + date + ' ' + time + '.' + extension
       return filename;
     }
-  });
+  }, elation.ui.base);
   
   elation.component.add('engine.server', function() {
     this.init = function() {

@@ -6,6 +6,9 @@ elation.require(['engine.things.generic'], function() {
         'color':             { type: 'color', default: 0xffffff },
         'intensity':         { type: 'float', default: 1.0 },
         'radius':            { type: 'float', default: 10000.0 },
+        'target':            { type: 'object' },
+        'angle':             { type: 'float', default: Math.PI/3 },
+        'exponent':          { type: 'float', default: 40 },
       });
 
     }
@@ -19,8 +22,12 @@ elation.require(['engine.things.generic'], function() {
           this.lightobj.castShadow = false;
           break;
         case 'spot':
-          this.lightobj = new THREE.SpotLight(this.properties.color, this.properties.intensity, this.properties.radius);
-          this.initShadowmap(this.lightobj);
+          this.lightobj = new THREE.SpotLight(this.properties.color, this.properties.intensity, this.properties.radius, this.properties.angle);
+          //this.initShadowmap(this.lightobj);
+          if (this.properties.target) {
+            this.lightobj.target = this.properties.target.objects['3d'];
+          }
+          this.lightobj.exponent = this.properties.exponent;
 
           var helper = new THREE.SpotLightHelper(this.lightobj, this.properties.intensity);
           //this.lightobj.add(helper);
@@ -28,13 +35,13 @@ elation.require(['engine.things.generic'], function() {
         case 'directional':
           this.lightobj = new THREE.DirectionalLight(this.properties.color, this.properties.intensity);
           this.lightobj.shadowCameraVisible = false;
-          this.initShadowmap(this.lightobj);
+          //this.initShadowmap(this.lightobj);
 
           var helper = new THREE.DirectionalLightHelper(this.lightobj, this.properties.intensity);
           //this.lightobj.add(helper);
           break;
         case 'ambient':
-          this.lightobj = new THREE.AmbientLight(0x999999);
+          this.lightobj = new THREE.AmbientLight(this.properties.color);
           break;
       } 
 
@@ -49,11 +56,11 @@ elation.require(['engine.things.generic'], function() {
       this.lightobj.color.setHex(color);
     }
     this.initShadowmap = function(light) {
-      light.castShadow = true;
+      light.castShadow = false;
       light.shadowCameraNear = 40;
       light.shadowCameraFar = 120;
       light.shadowCameraFov = 50;
-      light.shadowCameraVisible = false;
+      light.shadowCameraVisible = true;
 
       var d = 60;
       light.shadowCameraLeft = -d;

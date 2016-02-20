@@ -65,6 +65,58 @@ elation.require([], function() {
           }
         }
         return geom;
+      },
+      'sphere': function(params) {
+        var radius = params.radius,
+            widthSegments = params.heightSegments || 8,
+            heightSegments = params.widthSegments || 6,
+            phiStart = params.phiStart || 0,
+            phiLength = params.phiLength || Math.PI * 2,
+            thetaStart = params.thetaStart || 0,
+            thetaLength = params.thetaLength || Math.PI;
+        var geo = new THREE.SphereBufferGeometry(radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart, thetaLength);
+        return geo;
+      },
+      'box': function(params) {
+        var size = params.size || new THREE.Vector3(1,1,1),
+            offset = params.offset;
+
+        var geo = new THREE.CubeGeometry(size.x, size.y, size.z, 1, 1, 1);
+        
+        if (offset) {
+          geo.applyMatrix(new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z));
+        }
+        return geo;
+      },
+      'cylinder': function(params) {
+        var radius = params.radius,
+            height = params.height,
+            radialSegments = params.radialSegments || 8,
+            heightSegments = params.heightSegments || 1;
+        return new THREE.CylinderGeometry(radius, radius, height, radialSegments, heightSegments);
+      },
+      'capsule': function(params) {
+        var capsulegeo = new THREE.Geometry();
+        var radius = params.radius,
+            length = params.length,
+            radialSegments = params.radialSegments || 8,
+            heightSegments = params.heightSegments || 1,
+            offset = params.offset || false;
+
+        var cylgeo = new THREE.CylinderGeometry(radius, radius, length, radialSegments, heightSegments, true);
+        var cap = new THREE.SphereGeometry(radius, radialSegments, radialSegments/2, 0, Math.PI*2, 0, Math.PI/2);
+        var mat4 = new THREE.Matrix4();
+        mat4.makeTranslation(0, length / 2, 0);
+        capsulegeo.merge(cylgeo);
+        capsulegeo.merge(cap, mat4);
+        mat4.makeRotationX(Math.PI).setPosition(new THREE.Vector3(0, -length / 2, 0));
+        capsulegeo.merge(cap, mat4);
+
+        if (offset) {
+          capsulegeo.applyMatrix(mat4.makeTranslation(offset.x, offset.y, offset.z));
+        }
+
+        return capsulegeo;
       }
     };
     this.meshes = {};
@@ -133,7 +185,10 @@ elation.require([], function() {
       this.meshes[name] = mesh;
     }
     this.loadMeshFromURL = function(name, url, type) {
-      this.meshes[name] = new THREE.Group();
+      if (!this.meshes[name]) {
+        // Add a placeholder for newly-added objects so they can be used immediately
+        this.meshes[name] = new THREE.Group();
+      }
       if (typeof THREE.ColladaLoader == 'undefined') {
         // If the loader hasn't been initialized yet, fetch it!
         THREE.ColladaLoader = false;
@@ -149,6 +204,7 @@ elation.require([], function() {
     }
     this.handleMeshLoadCollada = function(name, url, data) {
       //this.meshes[name] = data.scene;
+      // Add the model data as a child of the placeholder we created earlier
       this.meshes[name].add(data.scene);
       //data.scene.rotation.x = -Math.PI/2;
       //data.scene.rotation.z = Math.PI;
@@ -163,7 +219,12 @@ elation.require([], function() {
       elation.events.fire({ type: 'resource_load_finish', element: this, data: { type: 'model', url: url } });
     }
     this.getMesh = function(name) {
-      return this.meshes[name];
+      if (!this.meshes[name]) {
+        // If we requested a mesh which hasn't been added yet, create a placeholder so it can be filled in later
+        this.meshes[name] = new THREE.Group();
+        return this.meshes[name];
+      }
+      return this.meshes[name].clone();
     }
     this.getMeshGeometry = function(name) {
       if (this.meshes[name] && this.meshes[name] instanceof THREE.Mesh) {

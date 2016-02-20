@@ -48,7 +48,23 @@ elation.require(['utils.template'], function() {
           //this.texturecache[url].flipY = false;
           */
         } else {
-          this.texturecache[url] = THREE.ImageUtils.loadTexture(url);
+          THREE.ImageUtils.crossOrigin = '';
+          var texture = this.texturecache[url] = THREE.ImageUtils.loadTexture(url, undefined, elation.bind(this, function() {
+            var image = texture.image;
+            image.crossOrigin = '';
+            if (!this.isPowerOfTwo(image.width) || !this.isPowerOfTwo(image.height)) {
+              // Scale up the texture to the next highest power of two dimensions.
+              var canvas = document.createElement("canvas");
+              canvas.width = this.nextHighestPowerOfTwo(image.width);
+              canvas.height = this.nextHighestPowerOfTwo(image.height);
+              var ctx = canvas.getContext("2d");
+              ctx.drawImage(image, 0, 0, image.width, image.height, 0, 0, canvas.width, canvas.height);
+              texture.image = canvas;
+              texture.needsUpdate = true;
+            }
+
+            elation.events.fire({element: texture, type: 'engine_texture_load'}); 
+          }));
           //elation.events.fire({ type: 'resource_load_start', data: { type: 'image', image: this.texturecache[url].image } });
         }
         if (!this.texturecache[url]) {
@@ -75,6 +91,17 @@ elation.require(['utils.template'], function() {
         texture.repeat.set(repeat[0], repeat[1]);
       }
     }
+    this.isPowerOfTwo = function(num) {
+      return (num & (num - 1)) == 0;
+    }
+    this.nextHighestPowerOfTwo = function(num) {
+      num--;
+      for (var i = 1; i < 32; i <<= 1) {
+        num = num | num >> i;
+      }
+      return num + 1;
+    }
+
     this.addShader = function(shadername, shader) {
       this.shaders[shadername] = shader;
     }
@@ -364,19 +391,27 @@ elation.require(['utils.template'], function() {
         }
       }
     }
-    this.getTextureLabel = function(text) {
+    this.getTextureLabel = function(text, fontsize, color, font, background) {
       var c = elation.html.create('canvas');
       var ctx = c.getContext('2d');
 
-      var fontsize = 12;
-      ctx.font = fontsize + 'px monospace';
+      if (fontsize === undefined) fontsize = 32;
+      if (color === undefined) color = '#fff';
+      if (font === undefined) font = 'serif';
+      if (background === undefined) background = 'rgba(0,0,0,0)';
 
+      ctx.font = fontsize + 'px ' + font;
       var size = ctx.measureText(text);
       c.width = size.width;
       c.height = fontsize;
+      // changing width resets context, so reset size
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, c.width, c.height);
 
-      ctx.fillStyle = '#0f0';
-      ctx.fillText(text, 0, fontsize);
+      ctx.font = fontsize + 'px ' + font;
+      ctx.fillStyle = color;
+      ctx.fillText(text, 0, fontsize - fontsize/6);
+      ctx.strokeText(text, 0, fontsize - fontsize/6);
 
   /*
   document.body.appendChild(c);
@@ -432,7 +467,7 @@ elation.require(['utils.template'], function() {
     }
   });
   if (ENV_IS_BROWSER) {
-    elation.engine.materials.add('uvtest', new THREE.MeshPhongMaterial({map: elation.engine.materials.getTexture('/media/space/textures/uvtest.png', [1, 1])}));
+    //elation.engine.materials.add('uvtest', new THREE.MeshPhongMaterial({map: elation.engine.materials.getTexture('/media/space/textures/uvtest.png', [1, 1])}));
   }
   elation.engine.materials.add('normal', new THREE.MeshNormalMaterial());
 });

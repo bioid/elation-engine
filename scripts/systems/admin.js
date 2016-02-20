@@ -4,6 +4,7 @@ elation.require([
   "engine.external.three.TransformControls",
   //"engine.external.highlight",
   "engine.things.manipulator",
+  "engine.things.camera_admin",
   "ui.accordion",
   "ui.buttonbar",
   "ui.slider",
@@ -24,7 +25,7 @@ elation.require([
   elation.requireCSS('engine.systems.admin');
 
   elation.template.add('engine.systems.admin.scenetree.thing', '<span class="engine_thing">{name}</span> ({type})');
-  elation.template.add('engine.systems.admin.inspector.property', '{?children}<span>{name}</span>{:else}<label for="engine_admin_inspector_properties_{fullname}">{name}</label><input id="engine_admin_inspector_properties_{fullname}" value="{value}">{/children}');
+  elation.template.add('engine.systems.admin.inspector.property', '{?children}<span>{name}</span>{:else}<label for="engine_admin_inspector_properties_{fullname}">{name}</label><input id="engine_admin_inspector_properties_{fullname}" name="{fullname}" value="{value}">{/children}');
   elation.template.add('engine.systems.admin.inspector.object', '<span class="engine_thing_object engine_thing_object_{type}">{object.name} ({type})</span>');
   elation.template.add('engine.systems.admin.inspector.function', '<span class="engine_thing_function{?function.own} engine_thing_function_own{/function.own}" title="this.{function.name} = {function.content}">{function.name}</span>');
 
@@ -55,25 +56,17 @@ elation.require([
 
         this.engine.systems.controls.addCommands('admin', {
           'add_thing': elation.bind(this, function(ev) { if (ev.value == 1) { this.scenetree.addItem(); }}),
-          'toggle_camera': elation.bind(this, function(ev) { if (ev.value == 1) { this.toggleControls(); }}),
-          'toggle_admin': elation.bind(this, function(ev) { if (ev.value == 1) { this.toggleAdmin(); }}),
-  /*
-          'move_left': elation.bind(this, this.moveleft),
-          'move_right': elation.bind(this, this.moveright),
-          'move_forward': elation.bind(this, this.moveforward),
-          'move_back': elation.bind(this, this.moveback),
-  */
+          'toggle_admin': elation.bind(this, function(ev) { if (ev.value == 1) { this.toggleAdmin(); } }),
+          'toggle_snap': elation.bind(this, function(ev) { this.toggleSnap(ev.value); }),
         });
         this.engine.systems.controls.addBindings('admin', {
           'keyboard_ctrl_a': 'add_thing',
-          'keyboard_ctrl_c': 'toggle_camera',
-          'keyboard_esc': 'toggle_admin',
-          'keyboard_ctrl_rightsquarebracket': 'toggle_vr',
-          'keyboard_ctrl_leftsquarebracket': 'calibrate_vr',
+          'keyboard_f1': 'toggle_admin',
+          'keyboard_shift': 'toggle_snap',
         });
         this.engine.systems.controls.activateContext('admin');
       } else if (this.cameraactive) {
-        this.admincontrols.update(ev.data.delta);
+        //this.admincontrols.update(ev.data.delta);
       }
       if (this.manipulator) {
         this.manipulator.update();
@@ -85,7 +78,9 @@ elation.require([
         var view = render.views['main'];
 
         this.manipulator = new THREE.TransformControls(view.actualcamera, view.container);
+        elation.events.add(this.manipulator, 'change', elation.bind(this, function() { this.manipulator.object.userData.thing.refresh(); render.setdirty(); }));
 
+/*
         this.orbitcontrols = new THREE.OrbitControls(view.camera, view.container);
         this.orbitcontrols.rotateUp(-Math.PI/4);
         this.orbitcontrols.rotateLeft(-Math.PI/4);
@@ -108,6 +103,10 @@ elation.require([
         this.admincontrols.update(0);
         this.cameraactive = true;
 
+*/
+      this.cameraactive = true;
+      this.admincontrols = true;
+        this.admincamera = this.world.spawn('camera_admin', 'admincam', { position: [0, 1, 1], view: this.engine.systems.render.views['main'], persist: false});
         elation.events.add(render.views['main'].container, 'dragenter,dragover,drop', this);
         elation.events.add(null, 'engine_control_capture,engine_control_release', this);
       }
@@ -117,30 +116,6 @@ elation.require([
       if (active) this.admincontrols.enabled = true;
       else this.admincontrols.enabled = false;
     }
-    this.toggleControls = function() {
-      var oldobject = false;
-      if (this.admincontrols) {
-        if (this.admincontrols.disable) {
-          this.admincontrols.disable();
-        } else {
-          this.admincontrols.enabled = false;
-        }
-        oldobject = this.admincontrols.object;
-      }
-      if (this.admincontrols === this.orbitcontrols) {
-        this.admincontrols = this.flycontrols;
-      } else {
-        this.admincontrols = this.orbitcontrols;
-      }
-      if (this.admincontrols.enable) {
-        this.admincontrols.enable()
-      } else {
-        this.admincontrols.enabled = true;
-      }
-      if (oldobject) {
-        this.admincontrols.object = oldobject;
-      }
-    }
     this.toggleAdmin = function(forceshow) {
       var render = this.engine.systems.render,
           view = render.views['main'];
@@ -149,14 +124,38 @@ elation.require([
         this.scenetree.hide();
         this.worldcontrol.hide();
         //this.inspector.hide();
-        view.toggleStats(false);
+        //view.toggleStats(false);
+
+        if (this.lastactivething) {
+          this.engine.client.setActiveThing(this.lastactivething);
+          this.lastactivething.enable();
+        }
+        if (this.manipulator && this.manipulator.parent) {
+          this.manipulator.parent.remove(this.manipulator);
+        }
+        this.lastactivething = false;
+        this.admincamera.disable();
       } else {
         this.hidden = false;
         this.scenetree.show();
         this.worldcontrol.show();
         //this.inspector.show();
-        view.toggleStats(true);
+        //view.toggleStats(true);
+
+        if (view.activething) {
+          this.lastactivething = view.activething;
+          this.lastactivething.disable();
+          this.admincamera.properties.position.copy(this.lastactivething.properties.position);
+        }
+        if (this.manipulator) {
+          this.engine.systems.world.scene['world-3d'].add(this.manipulator);
+        }
+        this.engine.client.setActiveThing(this.admincamera);
+        this.admincamera.enable();
       }
+    }
+    this.toggleSnap = function(state) {
+      this.manipulator.setSnap((state === 0 ? null : state));
     }
     this.dragenter = function(ev) {
       this.dragkeystate = {
@@ -226,12 +225,23 @@ elation.require([
       this.engine = this.world.engine;
 
       elation.events.add(this.world, 'engine_thing_create,world_thing_add,world_thing_remove', this);
+
+      this.attachEvents(this.world);
+      
       this.create();
 
       //this.cameratoggle = elation.ui.button(null, elation.html.create({tag: 'button', append: this.window.titlebar}), {label: '🔁'});
       //elation.events.add(this.cameratoggle, "ui_button_click", elation.bind(this, function() { this.admin.toggleControls(); }));
 
     }
+    this.attachEvents = function(thing) {
+      elation.events.add(thing, 'thing_add', elation.bind(this, this.world_thing_add));
+      elation.events.add(thing, 'thing_remove', elation.bind(this, this.world_thing_remove));
+      for (var k in thing.children) {
+        this.attachEvents(thing.children[k]);
+      }
+    }
+
     this.create = function() {
       this.addclass('engine_admin_scenetree');
       var title = elation.html.create({tag: 'h2'});
@@ -330,16 +340,18 @@ elation.require([
     }
     this.ui_treeview_select = function(ev) {
       var thing = ev.data.value;
-      if (thing.properties.pickable) {
+      if (thing.properties.pickable && !this.hidden) {
         this.selectedthing = ev.data;
         elation.engine.systems.admin.inspector('admin').setThing(this.selectedthing);
       }
     }
     this.world_thing_add = function(ev) {
+      this.attachEvents(ev.data.thing);
       // refresh tree view when new items are added
       if (ev.data.thing.properties.pickable) {
         this.treeview.setItems(this.world.children);
       }
+      //elation.events.add(ev.data.thing, 'engine_thing_create,world_thing_add,world_thing_remove', this);
       //ev.target.persist();
     }
     this.world_thing_remove = function(ev) {
@@ -635,8 +647,14 @@ elation.require([
 */
     }
     this.setThing = function(thingwrapper) {
+      if (this.thingwrapper) {
+        elation.events.remove(this.thingwrapper.value, 'thing_change', this);
+      }
       this.thingwrapper = thingwrapper;
       var thing = thingwrapper.value;
+
+      elation.events.add(this.thingwrapper.value, 'thing_change', this);
+
       if (!this.tabs) {
         this.createTabs();
       }
@@ -707,6 +725,9 @@ elation.require([
         this.tabcontents[newtab.name].setThing(this.thingwrapper);
       }
     }
+    this.thing_change = function(ev) {
+      this.tabcontents.properties.setThing(this.thingwrapper)
+    }
   }, elation.ui.base);
   elation.component.add("engine.systems.admin.inspector.properties", function() {
     this.defaultcontainer = { tag: 'div' };
@@ -750,7 +771,7 @@ elation.require([
         } else if (properties[k] instanceof THREE.Mesh) {
           root[k]['value'] = '[mesh]';
         } else if (properties[k] instanceof Object && !elation.utils.isArray(properties[k])) {
-          root[k]['children'] = this.buildPropertyTree(properties[k], prefix + k + "_");
+          root[k]['children'] = this.buildPropertyTree(properties[k], prefix + k + ".");
         } else if (elation.utils.isArray(properties[k]) || elation.utils.isObject(properties[k])) {
           root[k]['value'] = JSON.stringify(properties[k]);
         } else {
@@ -760,7 +781,7 @@ elation.require([
       return root;
     }
     this.change = function(ev) {
-      var propname = ev.target.id.replace(/^engine_admin_inspector_properties_/, "").replace(/_/g, ".");
+      var propname = ev.target.name;
       var thing = this.thingwrapper.value;
       thing.set(propname, ev.target.value, true);
     }
@@ -902,13 +923,19 @@ elation.require([
           'save': { label: 'save', events: { click: elation.bind(this, this.save) }, autoblur: true },
         }
       });
-      this.speedslider = elation.ui.slider(null, elation.html.create({append: this.content}), {
+      this.speedslider = elation.ui.slider({
+        append: this.content,
         value: this.timescale * 100,
-        minpos: -500,
-        maxpos: 500,
+        min: -500,
+        max: 500,
         labelprefix: 'Speed: ',
         labelsuffix: '%',
-        snap: 2.5
+        snap: 2.5,
+        handle: {
+          name: 'handle_one',
+          value: this.timescale * 100,
+          //bindvar: [this, this.timescale],
+        }
       });
       elation.events.add(this.speedslider, 'ui_slider_change', this);
 

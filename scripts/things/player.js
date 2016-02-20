@@ -4,51 +4,65 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
     this.postinit = function() {
       this.defineProperties({
         height: { type: 'float', default: 2.0 },
-        startposition: { type: 'vector3', default: new THREE.Vector3() }
+        fatness: { type: 'float', default: .25 },
+        mass: { type: 'float', default: 10.0 },
+        movespeed: { type: 'float', default: 300.0 },
+        runspeed: { type: 'float', default: 600.0 },
+        crouchspeed: { type: 'float', default: 150.0 },
+        turnspeed: { type: 'float', default: 2.0 },
+        movefriction: { type: 'float', default: 4.0 },
+        defaultplayer: { type: 'boolean', default: true },
+        startposition: { type: 'vector3', default: new THREE.Vector3() },
+        startorientation: { type: 'quaternion', default: new THREE.Quaternion() },
+        startcameraorientation: { type: 'quaternion', default: new THREE.Quaternion() }
       });
       this.controlstate = this.engine.systems.controls.addContext('player', {
-        'move_forward': ['keyboard_w', elation.bind(this, this.updateControls)],
-        'move_backward': ['keyboard_s,gamepad_0_axis_1', elation.bind(this, this.updateControls)],
-        'move_left': ['keyboard_a', elation.bind(this, this.updateControls)],
-        'move_right': ['keyboard_d,gamepad_0_axis_0', elation.bind(this, this.updateControls)],
-        'turn_left': ['keyboard_left', elation.bind(this, this.updateControls)],
-        'turn_right': ['keyboard_right,mouse_delta_x,gamepad_0_axis_2', elation.bind(this, this.updateControls)],
-        'look_up': ['keyboard_up', elation.bind(this, this.updateControls)],
-        'look_down': ['keyboard_down,mouse_delta_y,gamepad_0_axis_3', elation.bind(this, this.updateControls)],
+        'move_forward': ['keyboard_w,keyboard_shift_w', elation.bind(this, this.updateControls)],
+        'move_backward': ['keyboard_s,keyboard_shift_s,gamepad_0_axis_1', elation.bind(this, this.updateControls)],
+        'move_left': ['keyboard_a,keyboard_shift_a', elation.bind(this, this.updateControls)],
+        'move_right': ['keyboard_d,keyboard_shift_d,gamepad_0_axis_0', elation.bind(this, this.updateControls)],
+        'move_up': ['keyboard_r,keyboard_shift_r', elation.bind(this, this.updateControls)],
+        'move_down': ['keyboard_f,keyboard_shift_f', elation.bind(this, this.updateControls)],
+        'turn_left': ['keyboard_left,keyboard_shift_left', elation.bind(this, this.updateControls)],
+        'turn_right': ['keyboard_right,keyboard_shift_right,mouse_delta_x,gamepad_0_axis_2', elation.bind(this, this.updateControls)],
+        'look_up': ['keyboard_up,keyboard_shift_up', elation.bind(this, this.updateControls)],
+        'look_down': ['keyboard_down,keyboard_shift_down,mouse_delta_y,gamepad_0_axis_3', elation.bind(this, this.updateControls)],
         'run': ['keyboard_shift,gamepad_0_button_10', elation.bind(this, this.updateControls)],
-        'crouch': ['keyboard_c', elation.bind(this, this.updateControls)],
-        //'jump': ['keyboard_space,gamepad_0_button_1', elation.bind(this, this.updateControls)],
-        'toss_ball': ['keyboard_space,gamepad_0_button_0,mouse_button_0', elation.bind(this, this.toss_ball)],
+        'crouch': ['keyboard_c,keyboard_shift_c', elation.bind(this, this.updateControls)],
+        //'jump': ['keyboard_space,keyboard_shift_space,gamepad_0_button_1', elation.bind(this, this.updateControls)],
+        //'toss': ['keyboard_space,keyboard_shift_space,gamepad_0_button_0,mouse_button_0', elation.bind(this, this.toss)],
         //'toss_cube': ['keyboard_shift_space,gamepad_0_button_1', elation.bind(this, this.toss_cube)],
-        'use': ['keyboard_e,gamepad_0_button_0,mouse_button_0', elation.bind(this, this.handleUse)],
-        'toggle_gravity': ['keyboard_g', elation.bind(this, this.toggle_gravity)],
-        'reset_position': ['keyboard_r', elation.bind(this, this.reset_position)],
+        'use': ['keyboard_space,keyboard_e,gamepad_0_button_0,mouse_button_0', elation.bind(this, this.handleUse)],
+        'toggle_flying': ['keyboard_f,keyboard_shift_f', elation.bind(this, this.toggle_flying)],
+        'reset_position': ['keyboard_backspace', elation.bind(this, this.reset_position)],
         'pointerlock': ['mouse_0', elation.bind(this, this.updateControls)],
       });
       // Separate HMD context so it can remain active when player controls are disabled
       this.hmdstate = this.engine.systems.controls.addContext('playerhmd', {
         'hmd': ['hmd_0', elation.bind(this, this.refresh)],
-        //'orientation': ['orientation', elation.bind(this, this.refresh)],
+        'orientation': ['orientation', elation.bind(this, this.refresh)],
       });
       this.moveVector = new THREE.Vector3();
       this.turnVector = new THREE.Euler(0, 0, 0);
       this.lookVector = new THREE.Euler(0, 0, 0);
-      this.moveSpeed = 300;
-      this.runMultiplier = 2.5;
-      this.turnSpeed = 2;
-      this.moveFriction = 4;
       //this.engine.systems.controls.activateContext('player');
       this.engine.systems.controls.activateContext('playerhmd');
       this.charging = false;
       this.usegravity = false;
+      this.flying = true;
 
       this.lights = [];
       this.lightnum = 0;
 
       this.target = false;
+      this.addTag('player');
 
-      elation.events.add(this.engine, 'engine_frame', elation.bind(this, this.updateHUD));
+      //elation.events.add(this.engine, 'engine_frame', elation.bind(this, this.updateHUD));
       elation.events.add(this.objects.dynamics, 'physics_update', elation.bind(this, this.handleTargeting));
+      elation.events.add(this, 'thing_create', elation.bind(this, this.handleCreate));
+    }
+    this.createForces = function() {
+      this.objects.dynamics.setDamping(1,1);
     }
     this.createObjectDOM = function() {
       this.strengthmeter = elation.ui.progressbar(null, elation.html.create({append: document.body, classname: 'player_strengthmeter'}), {orientation: 'vertical'});
@@ -64,29 +78,40 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
         this.strengthmeter.set(0);
       }
     }
-    this.toss_ball = function(ev) {
-      if (ev.value == 1) {
-        this.charging = new Date().getTime();
-      } else if (this.charging) {
-        var cam = this.engine.systems.render.views['main'].camera;
-        var campos = cam.localToWorld(new THREE.Vector3(0,0,-1));
-        var camdir = cam.localToWorld(new THREE.Vector3(0,0,-2)).sub(campos).normalize();
-        var velocity = 5 + this.getCharge();
-        camdir.multiplyScalar(velocity);
-        camdir.add(this.objects.dynamics.velocity);
-  //console.log('pew!', velocity);
-        var foo = this.spawn('ball', 'ball_' + Math.round(Math.random() * 100000), { radius: .375, mass: 1, position: campos, velocity: camdir, lifetime: 30, gravity: this.usegravity, player_id: this.properties.player_id, tags: 'local_sync' }, true);
+    this.toss = function(ev) {
+      if (this.holding) {
+        if (ev.value == 1) {
+          this.charging = new Date().getTime();
+        } else if (this.charging) {
+          var bounds = this.holding.getBoundingSphere();
+          var campos = this.camera.localToWorld(new THREE.Vector3(0,0,-bounds.radius));
+          var camdir = this.camera.localToWorld(new THREE.Vector3(0,0,-2)).sub(campos).normalize();
+          var velocity = 0 + this.getCharge() / 10;
+          camdir.multiplyScalar(velocity);
+          camdir.add(this.objects.dynamics.velocity);
+    //console.log('pew!', velocity);
+          //var foo = this.spawn('ball', 'ball_' + Math.round(Math.random() * 100000), { radius: .125, mass: 1, position: campos, velocity: camdir, lifetime: 30, gravity: true, player_id: this.properties.player_id, tags: 'local_sync' }, true);
+          //var foo = this.spawn('ball', 'ball_' + Math.round(Math.random() * 100000), { radius: .08, mass: 1, position: campos, velocity: camdir, lifetime: 30, gravity: this.usegravity, player_id: this.properties.player_id, tags: 'local_sync' }, true);
 
-/*
-        if (!this.lights[this.lightnum]) {
-          this.lights[this.lightnum] = foo.spawn('light', null, { radius: 60, intensity: 1, color: 0xffffff});
-        } else {
-          this.lights[this.lightnum].reparent(foo);
+          //foo.addTag('enemy');
+          this.holding.reparent(this.engine.client.world);
+          //this.holding.properties.position.copy(campos);
+          this.holding.objects.dynamics.setVelocity(camdir);
+          console.log('throw it!', this.holding, campos, camdir);
+          this.holding = false;
+          this.charging = false;
         }
-        this.lightnum = (this.lightnum + 1) % 3;
-*/
-        foo.addTag('enemy');
-        this.charging = false;
+      } else {
+        if (ev.value == 1) {
+          this.charging = new Date().getTime();
+        } else if (this.charging) {
+          var campos = this.camera.localToWorld(new THREE.Vector3(0,0,-1));
+          var camdir = this.camera.localToWorld(new THREE.Vector3(0,0,-2)).sub(campos).normalize();
+          var velocity = 1 + this.getCharge() / 10;
+          camdir.multiplyScalar(velocity);
+          camdir.add(this.objects.dynamics.velocity);
+          var foo = this.spawn('ball', 'ball_' + Math.round(Math.random() * 100000), { radius: .125, mass: 1, position: campos, velocity: camdir, lifetime: 120, gravity: false, player_id: this.properties.player_id, tags: 'local_sync' }, true);
+        }
       }
     }
     this.toss_cube = function(ev) {
@@ -104,20 +129,22 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
         this.charging = false;
       }
     }
-    this.toggle_gravity = function(ev) {
+    this.toggle_flying = function(ev) {
       if (ev.value == 1) {
-        this.usegravity = !this.usegravity;
-        var mult = 1; // FIXME - I'd expect to use mass here, but thatgives too much force, so I'm hacking it
-        this.gravityForce.update(new THREE.Vector3(0,this.usegravity * -9.8 * mult, 0));
-        console.log("Gravity " + (this.usegravity ? "enabled" : "disabled"));
+        this.flying = !this.flying;
+        this.usegravity = !this.flying;
+        this.gravityForce.update(new THREE.Vector3(0,this.usegravity * -9.8, 0));
       }
     }
     this.reset_position = function(ev) {
       if (!ev || ev.value == 1) {
         this.properties.position.copy(this.properties.startposition);
+        this.properties.orientation.copy(this.properties.startorientation);
+        this.camera.properties.orientation.copy(this.properties.startcameraorientation);
         this.properties.velocity.set(0,0,0);
         this.objects.dynamics.angular.set(0,0,0);
         this.engine.systems.controls.calibrateHMDs();
+        this.refresh();
       }
     }
     this.getspin = function() {
@@ -126,6 +153,7 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
     }
     this.createObject3D = function() {
       this.objects['3d'] = new THREE.Object3D();
+      this.ears = new THREE.Object3D();
       //this.camera.rotation.set(-Math.PI/16, 0, 0);
 
       //var camhelper = new THREE.CameraHelper(this.camera);
@@ -133,18 +161,20 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
       return this.objects['3d'];
     }
     this.createChildren = function() {
+      // place camera at head height
+      this.camera.objects.dynamics.addConstraint('axis', { axis: new THREE.Vector3(1,0,0), min: -Math.PI/2, max: Math.PI/2 });
+      this.reset_position();
     }
     this.createForces = function() {
-      this.frictionForce = this.objects.dynamics.addForce("friction", this.moveFriction);
+      this.frictionForce = this.objects.dynamics.addForce("friction", this.properties.movefriction);
       this.gravityForce = this.objects.dynamics.addForce("gravity", new THREE.Vector3(0,0,0));
       this.moveForce = this.objects.dynamics.addForce("static", {});
       this.objects.dynamics.restitution = 0.1;
-      this.objects.dynamics.setCollider('sphere', {radius: .5});
+      this.objects.dynamics.setCollider('sphere', {radius: this.properties.fatness});
       this.objects.dynamics.addConstraint('axis', { axis: new THREE.Vector3(0,1,0) });
-
-      // place camera at head height
-      this.camera = this.spawn('camera', this.name + '_camera', { position: [0,this.properties.height * .8,0], mass: 0.1, player_id: this.properties.player_id } );
-      this.camera.objects.dynamics.addConstraint('axis', { axis: new THREE.Vector3(1,0,0), min: -Math.PI/2, max: Math.PI/2 });
+      // FIXME - should be in createChildren
+      this.camera = this.spawn('camera', this.name + '_camera', { position: [0,this.properties.height * .8 - this.properties.fatness,0], mass: 0.1, player_id: this.properties.player_id } );
+      this.camera.objects['3d'].add(this.ears);
     }
     this.getGroundHeight = function() {
       
@@ -154,15 +184,25 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
       this.engine.systems.controls.activateContext('player');
       this.engine.systems.controls.enablePointerLock(true);
       if (this.engine.systems.render.views.main) {
-        this.engine.systems.render.views.main.picking = false;
+        //this.engine.systems.render.views.main.disablePicking();
       }
+      this.controlstate._reset();
+      this.lookVector.set(0,0,0);
+      this.turnVector.set(0,0,0);
       this.enableuse = true;
+      this.enabled = true;
+      this.engine.systems.controls.requestPointerLock();
+
+      // FIXME - quick hack to ensure we don't refresh before everything is initialized
+      if (this.objects.dynamics) {
+        this.refresh();
+      }
     }
     this.disable = function() {
       this.engine.systems.controls.deactivateContext('player');
       this.engine.systems.controls.enablePointerLock(false);
       if (this.engine.systems.render.views.main) {
-        this.engine.systems.render.views.main.picking = true;
+        //this.engine.systems.render.views.main.enablePicking();
       }
       this.enableuse = false;
       if (this.objects.dynamics) {
@@ -175,36 +215,58 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
         this.camera.objects.dynamics.angular.set(0,0,0);
         this.camera.objects.dynamics.updateState();
       }
+      this.lookVector.set(0,0,0);
+      this.turnVector.set(0,0,0);
       this.hideUseDialog();
+      this.controlstate._reset();
+      this.enabled = false;
+      this.refresh();
     }
     this.refresh = (function() {
       var _dir = new THREE.Euler(); // Closure scratch variable
+      var _moveforce = new THREE.Vector3();
       return function() {
-        if (this.camera) {
+        if (this.camera && this.enabled) {
           this.moveVector.x = (this.controlstate.move_right - this.controlstate.move_left);
+          this.moveVector.y = (this.controlstate.move_up - this.controlstate.move_down);
           this.moveVector.z = -(this.controlstate.move_forward - this.controlstate.move_backward);
 
-          this.turnVector.y = (this.controlstate.turn_left - this.controlstate.turn_right) * this.turnSpeed;
-
-          this.lookVector.x = (this.controlstate.look_up - this.controlstate.look_down) * this.turnSpeed;
+          if (this.engine.systems.controls.pointerLockActive) {
+            this.turnVector.y = (this.controlstate.turn_left - this.controlstate.turn_right) * this.properties.turnspeed;
+            this.lookVector.x = (this.controlstate.look_up - this.controlstate.look_down) * this.properties.turnspeed;
+          }
 
           if (this.controlstate.jump) this.objects.dynamics.velocity.y = 5;
           if (this.controlstate.crouch) {
-            this.camera.properties.position.y = this.properties.height * .4;
+            if (this.flying) {
+              this.moveVector.y -= 1;
+            } else {
+              this.camera.properties.position.y = this.properties.height * .4 - this.properties.fatness;
+            }
           } else {
-            this.camera.properties.position.y = this.properties.height * .8;
+            if (!this.flying) {
+              this.camera.properties.position.y = this.properties.height * .8 - this.properties.fatness;
+            }
           }
 
           if (this.moveForce) {
-            var moveSpeed = Math.min(1.0, this.moveVector.length()) * this.moveSpeed * (this.controlstate.run ? this.runMultiplier : 1) * (this.controlstate.crouch ? .5 : 1);
-            this.moveForce.update(this.moveVector.clone().normalize().multiplyScalar(moveSpeed));
+            var moveSpeed = Math.min(1.0, this.moveVector.length());
+            if (this.controlstate.crouch) moveSpeed *= this.properties.crouchspeed;
+            else if (this.controlstate.run) moveSpeed *= this.properties.runspeed;
+            else moveSpeed *= this.properties.movespeed;
+            
+            _moveforce.copy(this.moveVector).normalize().multiplyScalar(moveSpeed);
+            if (this.flying) {
+              _moveforce.applyQuaternion(this.camera.properties.orientation);
+            }
+            this.moveForce.update(_moveforce);
             this.objects.dynamics.setAngularVelocity(this.turnVector);
 
             if (this.hmdstate.hmd && this.hmdstate.hmd.timeStamp !== 0) {
-              var scale = 1/.3048;
+              var scale = 1;///.3048;
               if (this.hmdstate.hmd.position) {
                 this.camera.objects.dynamics.position.copy(this.hmdstate.hmd.position).multiplyScalar(scale);
-                this.camera.objects.dynamics.position.y += this.properties.height * .8;
+                this.camera.objects.dynamics.position.y += this.properties.height * .8 - this.properties.fatness;
               }
               if (this.hmdstate.hmd.linearVelocity) {
                 this.camera.objects.dynamics.velocity.copy(this.hmdstate.hmd.linearVelocity).multiplyScalar(scale);
@@ -232,7 +294,6 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
                 this.lookVector.x = 0;
               }
 */
-//console.log(this.lookVector.toArray());
               this.camera.objects.dynamics.setAngularVelocity(this.lookVector);
               //this.camera.objects.dynamics.processConstraints([]);
               this.camera.objects.dynamics.updateState();
@@ -247,6 +308,13 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
     })();
     this.updateControls = function() {
       this.refresh();
+    }
+    this.handleCreate = function(ev) {
+      console.log('player is new', ev);
+      if (this.properties.defaultplayer) {
+        this.engine.client.setActiveThing(this);
+        this.enable();
+      }
     }
     this.handleTargeting = function() {
       if (this.enableuse) {
@@ -274,14 +342,18 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
       }
     }
     this.handleUse = function(ev) {
-      if (ev.value == 1) {
-        this.activateUseTarget();
+      if (this.holding && !(this.target && this.target.canUse(this))) {
+        this.toss(ev);
+      } else {
+        if (ev.value == 1) {
+          this.activateUseTarget();
+        }
       }
     }
     this.activateUseTarget = function() {
-      if (this.target && this.target.properties.working) {
+      if (this.target && this.target.canUse(this)) {
         elation.events.fire({type: 'thing_use_activate', element: this.target, data: this});
-        this.disable(); // FIXME - temporary
+        //this.disable(); // FIXME - temporary
       }
     }
     this.getUsableTarget = (function() {
@@ -314,23 +386,42 @@ elation.require(['engine.things.generic', 'engine.things.camera', 'ui.progressba
       if (!this.usedialog) {
         this.usedialog = elation.ui.window({append: document.body, bottom: true, center: true});
       }
-      if (typeof verb == 'undefined') verb = 'use';
-      if (typeof noun == 'undefined') noun = '';
 
-      this.usedialog.show();
-      var content = 'Press E or click to ' + verb + ' ' + noun;
+      var useable = this.target.canUse(this);
 
+      if (useable) {
+        var verb = useable.verb || 'use';
+        var noun = useable.noun || '';
+        this.usedialog.show();
+        var content = 'Press E or click to ' + verb + ' ' + noun;
+        this.usedialog.setcontent(content);
+      }
+
+/*
       // FIXME - hack for arcade games
       if (this.target && !this.target.properties.working) {
         content = 'Sorry, ' + (this.target.properties.gamename || 'this machine') + ' is temporarily out of order!';
       }
+*/
 
-      this.usedialog.setcontent(content);
     }
     this.hideUseDialog = function() {
       if (this.usedialog) {
         this.usedialog.hide();
       }
+    }
+    this.pickup = function(object, force) {
+      if (this.holding) {
+        //this.holding.reparent(this.engine.systems.world);
+        this.charging = 0.0001; // fixme - hardcoded value is silly here, this lets us just drop the item
+        this.toss({value: 0});
+      }
+      this.holding = object;
+      object.reparent(this.camera);
+      object.properties.position.set(0,-.075,-.15);
+      object.properties.velocity.set(0,0,0);
+      object.properties.angular.set(0,0,0);
+      object.properties.orientation.setFromEuler(new THREE.Euler(Math.PI/2,0,0)); // FIXME - probably not the best way to do this
     }
   }, elation.engine.things.generic);
 });

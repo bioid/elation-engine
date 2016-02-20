@@ -106,10 +106,14 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
       }
     };
 
+    this.capturekeys = [
+      'keyboard_f1'
+    ];
+
+    this.initialized = false;
 
     this.system_attach = function(ev) {
       console.log('INIT: controls');
-      this.initcontrols();
       if (this.loadonstart) {
         for (var k in this.loadonstart) {
           this.addContext(k, this.loadonstart[k]);
@@ -117,6 +121,9 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
       }
     }
     this.engine_frame = function(ev) {
+      if (!this.initialized) {
+        this.initcontrols();
+      }
       //console.log("FRAME: controls");
       this.update(ev.delta);
     }
@@ -134,6 +141,7 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
       if (args) {
         this.addContexts(args);
       }
+      this.initialized = true;
     }
     this.addCommands = function(context, commands) {
       this.contexts[context] = commands;
@@ -212,7 +220,8 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
               var action = this.bindings[context][this.changes[i]];
               if (this.contexts[context][action]) {
                 contextstate[action] = this.state[this.changes[i]];
-                var ev = {timeStamp: now, type: this.changes[i], value: this.state[this.changes[i]], data: contextstate};
+                //var ev = {timeStamp: now, type: this.changes[i], value: this.state[this.changes[i]], data: contextstate};
+                var ev = {timeStamp: now, type: action, value: this.state[this.changes[i]], data: contextstate};
                 //console.log('call it', this.changes[i], this.bindings[context][this.changes[i]], this.state[this.changes[i]]);
                 if (this.contexttargets[context]) {
                   ev.target = this.contexttargets[context];
@@ -245,6 +254,7 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
           16: 'shift',
           17: 'ctrl',
           18: 'alt',
+          20: 'capslock',
           27: 'esc',
 
           32: 'space',
@@ -295,7 +305,8 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
         case 'keyboard':
           var basename = type + '_' + (!elation.utils.isEmpty(subid) ? subid + '_' : '');
           if (codes[type][id]) {
-            bindname = basename + codes[type][id];
+            // map the numeric code to a string, skipping the subid if it's redundant
+            bindname = type + '_' + (!elation.utils.isEmpty(subid) && subid !== codes[type][id] ? subid + '_' : '') + codes[type][id];
           } else if (id >= 65 && id <= 90) {
             bindname = basename + String.fromCharCode(id).toLowerCase();
           } else if (id >= 48 && id <= 57) {
@@ -387,7 +398,7 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
     this.calibrateHMDs = function() {
       if (this.hmds) {
         for (var i = 0; i < this.hmds.length; i++) {
-          this.hmds[i].zeroSensor();
+          this.hmds[i].resetSensor();
         }
       }
     }
@@ -450,8 +461,8 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
           height = this.container.offsetHeight || this.container.innerHeight;
       var scaleX = this.settings.mouse.sensitivity * (this.settings.mouse.invertX ? -1 : 1),
           scaleY = this.settings.mouse.sensitivity * (this.settings.mouse.invertY ? -1 : 1),
-          movementX = elation.utils.any(ev.movementX, ev.mozMovementX, ev.webkitMovementX),
-          movementY = elation.utils.any(ev.movementY, ev.mozMovementY, ev.webkitMovementY);
+          movementX = elation.utils.any(ev.movementX, ev.mozMovementX),
+          movementY = elation.utils.any(ev.movementY, ev.mozMovementY);
 
       // FIXME - works around a chrome bug where pointer lock returns massive values on focus
       if (Math.abs(movementY) == window.screenY && Math.abs(movementX) - 5 >= window.screenX) return [0, 0];
@@ -473,8 +484,10 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
       return ret;
     }
     this.mousedown = function(ev) {
-      if (ev.button === 0) {
+      if (ev.button === 0 && !this.getPointerLockElement()) {
         this.requestPointerLock();
+        ev.stopPropagation();
+        ev.preventDefault();
       }
       var bindid = "mouse_button_" + ev.button;
       if (!this.state[bindid]) {
@@ -593,6 +606,9 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
         this.changes.push(keyname);
       }
       this.state[keyname] = 1;
+      if (this.capturekeys.indexOf(keyname) != -1) {
+        ev.preventDefault();
+      }
     }
     this.keyup = function(ev) {
       var keymod = this.getKeyboardModifiers(ev);
@@ -736,15 +752,15 @@ elation.require(['ui.window', 'ui.panel', 'ui.toggle', 'ui.slider', 'ui.label', 
     this.create = function() {
         var mousecontrols = elation.ui.panel({
           append: this,
-          classname: 'controls_mouse',
+          classname: 'engine_config_section controls_mouse',
         });
         var gamepadcontrols = elation.ui.panel({
           append: this,
-          classname: 'controls_gamepad',
+          classname: 'engine_config_section controls_gamepad',
         });
         var keyboardcontrols = elation.ui.panel({
           append: this,
-          classname: 'controls_keyboard',
+          classname: 'engine_config_section controls_keyboard',
         });
         var label = elation.ui.labeldivider({
           append: mousecontrols, 

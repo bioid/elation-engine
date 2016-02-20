@@ -1,9 +1,10 @@
 elation.component.add("engine.things.sector", function() {
   this.postinit = function() {
     this.defineProperties({
+      'assets.pack':             { type: 'string', default: false },
       'fog.enabled':             { type: 'bool', default: false },
       'fog.color':               { type: 'color', default: 0x000000 },
-      'fog.factor':              { type: 'float', default: 0.0000008 },
+      'fog.factor':              { type: 'float', default: 8e-6 },
       'ambient.enabled':         { type: 'bool', default: false },
       'ambient.color':           { type: 'color', default: 0x333333 },
       'light.enabled':           { type: 'bool', default: false },
@@ -21,6 +22,9 @@ elation.component.add("engine.things.sector", function() {
     });
     if (this.properties.skybox.enabled) {
       this.setSky();
+    }
+    if (this.properties.fog.enabled) {
+      this.engine.systems.world.setFog(0, 1000, this.properties.fog.color);
     }
   }
   this.createObject3D = function() {
@@ -45,6 +49,10 @@ elation.component.add("engine.things.sector", function() {
 
       var plane = new THREE.Mesh(planegeo, planemat);
       obj.add(plane);
+    }
+
+    if (this.properties.assets.pack) {
+      elation.engine.assets.loadAssetPack(this.properties.assets.pack);
     }
     //this.spawn("gridhelper", "grid", {range: 20});
     return obj;
