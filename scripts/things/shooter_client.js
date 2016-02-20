@@ -60,6 +60,7 @@ elation.require(_reqs, function() {
       for (var k in world.things) {
         var thing = world.things[k];
         this.spawn(thing.type, thing.name, thing.properties); 
+	console.log("spawning a thing from the server:", thing);
       }
       this.loaded = true;
     };
@@ -185,26 +186,8 @@ elation.require(_reqs, function() {
       }
     }
         this.create_lights = function() {
-      var lights = [];
-/*
-      lights.push(this.spawn('light', 'sun', {
-        "position":[50,30,-30],
-        "persist":false,
-        "type":"directional",
-        "intensity":0.6,
-        //"velocity":[0,0,0.05]
-      }));
-*/
-      /*
-      lights.push(this.spawn('light', 'sun2', {
-        "position":[-50,-30,-30],
-        "persist":false,
-        "type":"directional",
-        "intensity":0.2,
-        //"velocity":[0,0,0.05]
-      }));
-      */
-      lights.push(this.spawn('light', 'point01', {
+     var lights = [];
+     lights.push(this.spawn('light', 'point01', {
         "position":[-10,20,10],
         "persist":false,
         "type":"point",

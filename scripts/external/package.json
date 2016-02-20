@@ -10,11 +10,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "canvas": "^1.2.3",
-    "concatenate-files": "^0.1.1",
-    "wrtc": "0.0.56",
-    "ws": "^0.7.2",
-    "xhr2": "^0.1.2",
-    "xml2js": "^0.4.10"
+    "canvas": "*",
+    "concatenate-files": "*",
+    "wrtc": "*",
+    "ws": "*",
+    "xhr2": "*",
+    "xml2js": "*"
   }
 }
