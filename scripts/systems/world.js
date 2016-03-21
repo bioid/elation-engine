@@ -78,7 +78,7 @@ elation.require([
     }
       
     this.thing_add = function(ev) {
-      //elation.events.fire({type: 'world_thing_add', element: this, data: ev.data});
+      elation.events.fire({type: 'world_thing_add', element: this, data: ev.data});
       this.attachEvents(ev.data.thing);
 
       if (this.hasLights(ev.data.thing)) {
@@ -358,13 +358,29 @@ elation.require([
     }
     this.serialize = function(serializeAll) {
       var ret = {};
-      for (var k in this.children) {
-        if (this.children[k].properties.persist) {
+/* 
+     for (var k in this.children) {
+        if (!this.serializeAll && this.children[k].properties.persist) {
+          ret[k] = this.children[k].serialize(serializeAll);
+          return ret[k]; // FIXME - dumb
+        }
+        else if (this.serializeAll) {
+          ret[k] = this.children[k].serialize(serializeAll);
+          return ret[k];
+        }
+      }
+      return null;
+*/
+      for (var k in this.children)
+      {
+        if (serializeAll || this.children[k].properties.persist)
+        {
           ret[k] = this.children[k].serialize(serializeAll);
           return ret[k]; // FIXME - dumb
         }
       }
-      return null;
+      return ret;
+   
     }
     this.setSky = function(texture, format, prefixes) {
       if (texture !== false) {
